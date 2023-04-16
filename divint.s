@@ -1,23 +1,31 @@
-PORTB = $6000
-PORTA = $6001
-DDRB = $6002
-DDRA = $6003
+PORTB = $6000   ; Data B
+PORTA = $6001   ; Data A
+DDRB = $6002    ; Data Direction B
+DDRA = $6003    ; Data Direction A
+PCR  = $600c    ; Peripheral Control
+IFR  = $600d    ; Interrupt Flag Register
+IER  = $600e    ; Interrupt Enable Register
 
 value =     $0200   ; 2 bytes
 mod10 =     $0202   ; 2 bytes
 message =   $0204 ; 6 bytes
 counter =   $020a ; 2 bytes
 
-E  = %10000000
-RW = %01000000
-RS = %00100000
+E  = %10000000  ; LCD Emable
+RW = %01000000  ; LCD Read/Write
+RS = %00100000  ; LCD Register Select
 
     .org $8000
 reset:
     ldx #$ff
     txs
     cli
-    
+
+    lda #$82
+    sta IER
+    lda #$00
+    sta PCR
+
     lda #%11111111  ; Set all pins on port B to output
     sta DDRB
     lda #%11100000  ; Set top 3 pins on port A to output
@@ -43,10 +51,13 @@ loop:
     lda #0
     sta message
 
+    sei
     lda counter
     sta value
     lda counter + 1
     sta value + 1
+    cli
+
 divide:
     lda #0
     sta mod10
@@ -158,13 +169,35 @@ nmi:
     rti
 
 irq:
+    pha
+    txa
+    pha
+    tya 
+    pha
+
     inc counter
     bne exit_irq
     inc counter + 1
 exit_irq:
+
+    ldy #$ff
+    ldx #$ff
+delay:
+    dex
+    bne delay
+    dey
+    bne delay
+
+    lda PORTA
+
+    pla
+    tay
+    pla
+    tax
+    pla
     rti
 
-
+; vectors
     .org $fffa
     .word nmi
     .word reset
