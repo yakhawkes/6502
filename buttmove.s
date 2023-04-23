@@ -1,0 +1,166 @@
+PORTB = $6000   ; Data B
+PORTA = $6001   ; Data A
+DDRB = $6002    ; Data Direction B
+DDRA = $6003    ; Data Direction A
+PCR  = $600c    ; Peripheral Control
+IFR  = $600d    ; Interrupt Flag Register
+IER  = $600e    ; Interrupt Enable Register
+
+curh    = $0300 ;
+blank   = " "
+block   = $ff
+
+SAC = %10000000 ; set cursor address counter
+E  = %10000000  ; LCD Emable
+RW = %01000000  ; LCD Read/Write
+RS = %00100000  
+
+CB      = %00011110  ; Control Buttons
+LEFT    = %00000010
+UP      = %00000100
+RIGHT   = %00001000
+DOWN    = %00010000
+
+
+    .org $8000
+reset:
+    ldx #$ff
+    txs
+    cli
+
+    lda #$83
+    sta IER
+    lda #%00000101  ; Input-positive active edge 
+    sta PCR
+
+    lda #%11111111  ; Set all pins on port B to output
+    sta DDRB
+    lda #%11100000  ; Set top 3 pins on port A to output
+    sta DDRA
+
+    lda #%00111000  ; Set 8 bit mode - 2 line - 5x8 font
+    jsr lcd_instruction
+    lda #%00001110  ; Set display on - cursor on - blink off
+    jsr lcd_instruction
+    lda #%00000110  ; Set inc and shift cursor - no scroll
+    jsr lcd_instruction
+    lda #%00000001  ; Clear screen
+    jsr lcd_instruction
+
+    lda #$01
+    sta curh
+    jsr move_cursor
+    lda #$ff
+    jsr print_char
+
+loop:
+    jmp loop
+
+
+
+lcd_wait:
+    pha
+    lda #%00000000  ; Set Port B to input
+    sta DDRB
+lcd_busy
+    lda #RW
+    sta PORTA
+    lda # (RW | E)
+    sta PORTA
+    lda PORTB
+    and #%10000000
+    bne lcd_busy
+    lda #RW
+    sta PORTA
+    lda #%11111111  ; Set Port B to output
+    sta DDRB
+    pla
+    rts
+
+lcd_instruction:
+    jsr lcd_wait
+    sta PORTB
+    lda #0          ; Clear E RW RS bits
+    sta PORTA
+    lda #E          ; set E to send instruction
+    sta PORTA
+    lda #0          ; Clear E RW RS bits
+    sta PORTA
+    rts
+
+print_char:
+    jsr lcd_wait
+    sta PORTB
+    lda #RS         ; Set RS - Clear E RW bits
+    sta PORTA
+    lda #(RS | E)   ; set RS E to send instruction
+    sta PORTA
+    lda #RS         ; Set RS - Clear E RW bits
+    sta PORTA
+    rts
+
+move_cursor:
+    jsr lcd_wait
+    pha
+    lda curh
+    ora #SAC
+    sta PORTB
+    lda #0          ; Clear E RW RS bits
+    sta PORTA
+    lda #E          ; set E to send instruction
+    sta PORTA
+    lda #0          ; Clear E RW RS bits
+    sta PORTA
+    pla
+    rts
+
+
+
+nmi:
+    rti
+
+irq:
+    pha
+    txa
+    pha
+    tya 
+    pha
+
+
+    jsr move_cursor
+    lda blank
+    jsr print_char
+    lda curh
+
+    lda PORTA
+    and #%00011110
+    bit LEFT
+    beq goleft
+    bit RIGHT
+    beq goright
+    	;Interrupt request vector
+goleft:
+    dec curh
+    jmp exit_irq
+goright:
+    inc curh
+    jmp exit_irq
+
+exit_irq:
+    jsr move_cursor
+    lda block
+    jsr print_char
+
+
+    pla
+    tay
+    pla
+    tax
+    pla
+    rti
+
+; vectors
+    .org $fffa
+    .word nmi
+    .word reset
+    .word irq
