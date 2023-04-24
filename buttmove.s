@@ -15,18 +15,13 @@ E  = %10000000  ; LCD Emable
 RW = %01000000  ; LCD Read/Write
 RS = %00100000  
 
-CB      = %00011110  ; Control Buttons
-LEFT    = %00000010
-UP      = %00000100
-RIGHT   = %00001000
-DOWN    = %00010000
+
 
 
     .org $8000
 reset:
     ldx #$ff
     txs
-    cli
 
     lda #$83
     sta IER
@@ -40,18 +35,19 @@ reset:
 
     lda #%00111000  ; Set 8 bit mode - 2 line - 5x8 font
     jsr lcd_instruction
-    lda #%00001110  ; Set display on - cursor on - blink off
+    lda #%00001100  ; Set display on - cursor off - blink off
     jsr lcd_instruction
     lda #%00000110  ; Set inc and shift cursor - no scroll
     jsr lcd_instruction
     lda #%00000001  ; Clear screen
     jsr lcd_instruction
 
-    lda #$01
+    lda #$00
     sta curh
     jsr move_cursor
     lda #$ff
     jsr print_char
+    cli
 
 loop:
     jmp loop
@@ -118,6 +114,12 @@ move_cursor:
 
 nmi:
     rti
+;left: .byte %00000010
+;CB      = %00011110  ; Control Buttons
+LEFT: .byte %00000010
+UP: .byte %00000100
+RIGHT: .byte %0001000
+DOWN: .byte %00010000
 
 irq:
     pha
@@ -128,29 +130,47 @@ irq:
 
 
     jsr move_cursor
-    lda blank
+    lda #" "
     jsr print_char
-    lda curh
+    lda #" "
+    jsr print_char
 
     lda PORTA
     and #%00011110
+    beq exit_move
     bit LEFT
-    beq goleft
+    bne goleft
     bit RIGHT
-    beq goright
-    	;Interrupt request vector
+    bne goright
+    bit UP
+    bne goup
+    bit DOWN
+    bne godown
+    jmp exit_move
+    
 goleft:
     dec curh
-    jmp exit_irq
+    jmp exit_move
 goright:
     inc curh
-    jmp exit_irq
+    jmp exit_move
+goup:
+    lda curh
+    clc
+    sbc #$3f
+    sta curh
+    jmp exit_move
+godown:
+    lda curh
+    clc
+    adc #$40
+    sta curh
+    jmp exit_move
 
-exit_irq:
+exit_move:
     jsr move_cursor
-    lda block
+    lda #$ff 
     jsr print_char
-
 
     pla
     tay
