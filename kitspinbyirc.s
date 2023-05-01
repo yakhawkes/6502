@@ -52,7 +52,7 @@ reset:
 
     lda #%00111000  ; Set 8 bit mode - 2 line - 5x8 font
     jsr lcd_instruction
-    lda #%00001110  ; Set display on - cursor on - blink off
+    lda #%00001100  ; Set display on - cursor off - blink off
     jsr lcd_instruction
     lda #%00000110  ; Set inc and shift cursor - no scroll
     jsr lcd_instruction
@@ -94,20 +94,13 @@ move_ball:
     clc
     adc dir
     sta ballp
-    jsr move_cursor
-    jsr read_char
-    sta under_ball
-    lda ballp
-    jsr move_cursor
-    lda #block
-    jsr print_char
-
-    lda #$0e
+    lda #$0f
     cmp ballp
     beq bacward
-    lda #$41
+    lda #$40
     cmp ballp
     beq forward
+
     jmp update_ball_time
 bacward:
     sec
@@ -115,12 +108,8 @@ bacward:
     sbc #$02
     sta dir
     lda ballp
-    jsr move_cursor
-    lda #" "
-    jsr print_char
-    lda ballp
     clc
-    adc #$41
+    adc #$3f
     sta ballp
     jmp update_ball_time  
 forward:
@@ -129,14 +118,18 @@ forward:
     adc #$02
     sta dir 
     lda ballp
-    jsr move_cursor
-    lda #" "
-    jsr print_char
-    lda ballp
     clc
-    sbc #$40
+    sbc #$3e
     sta ballp
 update_ball_time:
+    lda ballp
+    jsr move_cursor
+    jsr read_char
+    sta under_ball
+    lda ballp
+    jsr move_cursor
+    lda #block
+    jsr print_char
     lda ticks
     sta ball_time
     jsr check_squash
