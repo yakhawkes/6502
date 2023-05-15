@@ -11,13 +11,14 @@ IER     = $600e     ; Interrupt Enable Register
 
 ticks       = $00   ; 4 bytes
 ball_time   = $05 ; 1 byte
-sount_time  = $06 ; 1 byte1 byte
-tone        = $07 ; 1
+sount_time  = $06 ; 1 byte
 ballp       = $0300 ; 1 byte
 dir         = $0302 ; 1 byte
 cur        = $0303 ; 1 byte
 under_ball  = $0304 ; 1 byte
-under_cursor= $0305 ;  byte
+under_cursor= $0305 ; 1 byte
+tone        = $0306 ; 1 byte
+length      = $0307 ; 1 byte
 
 blank       = " "
 block       = $ff
@@ -40,6 +41,7 @@ CA2FLAG         =  %00000001
 reset:
     ldx #$ff
     txs
+    stx length
 
     lda #%11000011
     sta IER
@@ -85,19 +87,19 @@ loop:
     jmp loop
 
 beep:
-    ldx #$ff
+    ldx length
 beeping:
     jsr sound
     cpx #0
     bne beeping
-    rts
+    rts    
 
 sound:
     sei
     sec 
     lda ticks
     sbc sount_time
-    cmp 1
+    cmp tone
     bcc exit_sound
     lda #$01
     eor PORTA
@@ -191,9 +193,6 @@ goleft:
     bit cur
     beq exit_move
     dec cur
-    lda $04
-    sta tone
-    jsr beep
     jmp exit_move
 goright:
     lda cur
@@ -201,9 +200,6 @@ goright:
     cmp #%000001111
     beq exit_move
     inc cur
-    lda $02
-    sta tone
-    jsr beep
     jmp exit_move
 goup:
     lda #%01000000
@@ -213,9 +209,6 @@ goup:
     clc
     sbc #$3f
     sta cur
-    lda $01
-    sta tone
-    jsr beep
     jmp exit_move
 godown:
     lda #%01000000
@@ -225,9 +218,6 @@ godown:
     clc
     adc #$40
     sta cur
-    lda $03
-    sta tone
-    jsr beep
     jmp exit_move
 
 exit_move:
@@ -239,6 +229,11 @@ exit_move:
     jsr move_cursor
     lda #block 
     jsr print_char
+    lda #$01
+    sta tone
+    lda #$62
+    sta length
+    jsr beep
     jsr check_squash
     rts
 
@@ -250,6 +245,10 @@ check_squash
     lda #$58
     sta under_ball
     sta under_cursor 
+    lda #$03
+    sta tone
+    lda #$ff
+    sta length
     jsr beep
 no_squash
     pla
