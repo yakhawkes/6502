@@ -20,9 +20,15 @@ under_ball  = $0305 ; 1 byte
 under_cursor= $0306 ; 1 byte
 tone        = $0307 ; 1 byte
 length      = $0308 ; 1 byte
+p1score     = $0309 ; 1 byte
+p2score     = $030a ; 1 byte
+booping     = $030b ; 1 byte
 
 blank       = " "
 block       = $ff
+
+p1score_pos = $05
+p2score_pos = $0a
 
 SAC = %10000000 ; set cursor address counter
 E  = %10000000  ; LCD Emable
@@ -66,6 +72,9 @@ reset:
     jsr lcd_instruction
 
 
+    lda #"0"
+    sta p1score
+    sta p2score
     lda #$01
     sta dir
     sta ballp
@@ -74,6 +83,7 @@ reset:
     sta PORTA
     sta ball_time
     sta p1pos
+    sta booping
     jsr move_cursor
     lda #$ff
     jsr print_char
@@ -82,15 +92,27 @@ reset:
     jsr move_cursor
     lda #$ff
     jsr print_char
-    lda #" "
+    lda #blank
     sta under_ball
     sta under_cursor
     jsr draw_net
+    jsr print_scores
     cli
 
 loop:
     jsr move_ball
     jmp loop
+
+boop:
+    inc booping
+    lda #$03
+    sta tone
+    lda #$ff
+    sta length
+    jsr beep
+    jsr print_underball
+    dec booping
+    rts
 
 pong:
     pha
@@ -134,24 +156,83 @@ move_ball:
     sbc ball_time
     cmp #100 ; 100ms
     bcc exit_move_ball
+    jsr print_underball
 
-    lda ballp
-    jsr move_cursor
-    lda under_ball
-    jsr print_char
     lda ballp
     clc
     adc dir
     sta ballp
     tax
-    cpx p2pos
+    cpx p2pos           ; Check for bounce off play 2
     beq bacward
     tax
-    cpx p1pos
+    cpx p1pos           ; Check for bounce off play 1
     beq forward
 
-    jmp update_ball_time
+    jmp print_ball
 bacward:
+    jsr bounce_ball_backwards
+    jmp print_ball
+forward:
+    jsr bounce_ball_forwards
+print_ball:
+    jsr read_underball
+    lda ballp
+    jsr move_cursor
+    lda #block
+    jsr print_char
+
+    lda #%000001111
+    bit ballp           ; check if player 1 missed
+    beq p1_miss
+    lda ballp
+    and #%000001111
+    cmp #%000001111     ; check if player 2 missed
+    beq p2_miss
+    jmp update_ball_time
+
+p1_miss
+    jsr p1_missed
+    jmp update_ball_time
+p2_miss
+    jsr p2_missed
+update_ball_time:
+    lda ticks
+    sta ball_time
+exit_move_ball:
+    rts
+
+p1_missed:
+    jsr boop
+    inc p2score
+    jsr print_scores
+    lda #$08
+    sta ballp
+    jsr read_underball
+    rts
+
+p2_missed:
+    jsr boop
+    inc p1score
+    jsr print_scores
+    lda #$07
+    sta ballp
+    jsr read_underball
+    rts
+
+print_scores:
+    lda #p1score_pos
+    jsr move_cursor
+    lda p1score
+    jsr print_char
+    lda #p2score_pos
+    jsr move_cursor
+    lda p2score
+    jsr print_char
+    rts
+
+
+bounce_ball_backwards
     sec
     lda dir
     sbc #$02
@@ -160,10 +241,10 @@ bacward:
     sec
     sbc #$02
     sta ballp
-
     jsr pong
-    jmp update_ball_time  
-forward:
+    rts
+
+bounce_ball_forwards:
     lda dir
     clc
     adc #$02
@@ -172,24 +253,12 @@ forward:
     clc
     adc #$02
     sta ballp
-
     jsr pong
-update_ball_time:
-    lda ballp
-    jsr move_cursor
-    jsr read_char
-    sta under_ball
-    lda ballp
-    jsr move_cursor
-    lda #block
-    jsr print_char
-    lda ticks
-    sta ball_time
-    jsr check_squash
-exit_move_ball:
     rts
 
 p1_move:
+    lda booping
+    bne exit_p1_move    ; do not move if booping
     lda p1pos
     jsr move_cursor
     lda under_cursor
@@ -211,7 +280,7 @@ p1up:
     clc
     sbc #$3f
     sta p1pos
-    jmp exit_p1_move
+    jmp print_p1_move
 p1down:
     lda #%01000000
     bit p1pos
@@ -220,9 +289,9 @@ p1down:
     clc
     adc #$40
     sta p1pos
-    jmp exit_p1_move
+    jmp print_p1_move
 
-exit_p1_move:
+print_p1_move:
     lda p1pos
     jsr move_cursor
     jsr read_char
@@ -231,9 +300,12 @@ exit_p1_move:
     jsr move_cursor
     lda #block 
     jsr print_char
+exit_p1_move:
     rts
 
 p2_move:
+    lda booping
+    bne exit_p2_move    ; do not move if booping
     lda p2pos
     jsr move_cursor
     lda under_cursor
@@ -256,7 +328,7 @@ p2up:
     clc
     sbc #$3f
     sta p2pos
-    jmp exit_p2_move
+    jmp print_p2_move
 p2down:
     lda #%01000000
     bit p2pos
@@ -265,9 +337,9 @@ p2down:
     clc
     adc #$40
     sta p2pos
-    jmp exit_p2_move
+    jmp print_p2_move
 
-exit_p2_move:
+print_p2_move:
     lda p2pos
     jsr move_cursor
     jsr read_char
@@ -275,24 +347,8 @@ exit_p2_move:
     lda p2pos
     jsr move_cursor
     lda #block 
+exit_p2_move:
     jsr print_char
-    rts
-
-check_squash
-    pha
-    lda p2pos
-    cmp ballp
-    bne no_squash
-    lda #$58
-    sta under_ball
-    sta under_cursor 
-    lda #$03
-    sta tone
-    lda #$ff
-    sta length
-    jsr beep
-no_squash
-    pla
     rts
 
 init_timer
@@ -307,6 +363,20 @@ init_timer
     sta T1CL
     lda #$03
     sta T1CH
+    rts
+
+print_underball:
+    lda ballp
+    jsr move_cursor
+    lda under_ball
+    jsr print_char
+    rts
+
+read_underball
+    lda ballp
+    jsr move_cursor
+    jsr read_char
+    sta under_ball
     rts
 
 draw_net:
