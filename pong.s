@@ -17,12 +17,11 @@ dir         = $0302 ; 1 byte
 p1pos       = $0303 ; 1 byte
 p2pos       = $0304 ; 1 byte
 under_ball  = $0305 ; 1 byte
-under_cursor= $0306 ; 1 byte
+;under_cursor= $0306 ; 1 byte
 tone        = $0307 ; 1 byte
 length      = $0308 ; 1 byte
 p1score     = $0309 ; 1 byte
 p2score     = $030a ; 1 byte
-booping     = $030b ; 1 byte
 
 blank       = " "
 block       = $ff
@@ -83,7 +82,6 @@ reset:
     sta PORTA
     sta ball_time
     sta p1pos
-    sta booping
     jsr move_cursor
     lda #$ff
     jsr print_char
@@ -94,7 +92,6 @@ reset:
     jsr print_char
     lda #blank
     sta under_ball
-    sta under_cursor
     jsr draw_net
     jsr print_scores
     cli
@@ -104,14 +101,11 @@ loop:
     jmp loop
 
 boop:
-    inc booping
     lda #$03
     sta tone
     lda #$ff
     sta length
     jsr beep
-    jsr print_underball
-    dec booping
     rts
 
 pong:
@@ -204,6 +198,13 @@ exit_move_ball:
 
 p1_missed:
     jsr boop
+    lda p1pos
+    cmp ballp
+    bne ball_not_on_p1
+    lda #block
+    sta under_ball
+ball_not_on_p1:
+    jsr print_underball
     inc p2score
     jsr print_scores
     lda #$08
@@ -212,6 +213,14 @@ p1_missed:
     rts
 
 p2_missed:
+    jsr boop
+    lda p2pos
+    cmp ballp
+    bne ball_not_on_p2
+    lda #block
+    sta under_ball
+ball_not_on_p2:
+    jsr print_underball
     jsr boop
     inc p1score
     jsr print_scores
@@ -257,13 +266,6 @@ bounce_ball_forwards:
     rts
 
 p1_move:
-    lda booping
-    bne exit_p1_move    ; do not move if booping
-    lda p1pos
-    jsr move_cursor
-    lda under_cursor
-    jsr print_char
-
     lda PORTA
     and #%00000110
     beq exit_p1_move
@@ -275,7 +277,11 @@ p1_move:
 p1up:
     lda #%01000000
     bit p1pos
-    beq exit_p1_move
+    beq exit_p1_move   ;
+    lda p1pos
+    jsr move_cursor
+    lda #blank
+    jsr print_char
     lda p1pos
     clc
     sbc #$3f
@@ -284,7 +290,11 @@ p1up:
 p1down:
     lda #%01000000
     bit p1pos
-    bne exit_p1_move
+    bne exit_p1_move    ; 
+    lda p1pos
+    jsr move_cursor
+    lda #blank
+    jsr print_char
     lda p1pos
     clc
     adc #$40
@@ -294,36 +304,30 @@ p1down:
 print_p1_move:
     lda p1pos
     jsr move_cursor
-    jsr read_char
-    sta under_cursor
-    lda p1pos
-    jsr move_cursor
     lda #block 
     jsr print_char
 exit_p1_move:
     rts
 
 p2_move:
-    lda booping
-    bne exit_p2_move    ; do not move if booping
     lda p2pos
     jsr move_cursor
-    lda under_cursor
+    lda #blank
     jsr print_char
 
     lda PORTA
     and #%00011000
-    beq exit_p2_move
+    beq print_p2_move
     bit P2UP
     bne p2up
     bit P2DOWN
     bne p2down
-    jmp exit_p2_move
+    jmp print_p2_move
     
 p2up:
     lda #%01000000
     bit p2pos
-    beq exit_p2_move
+    beq print_p2_move
     lda p2pos
     clc
     sbc #$3f
@@ -332,7 +336,7 @@ p2up:
 p2down:
     lda #%01000000
     bit p2pos
-    bne exit_p2_move
+    bne print_p2_move
     lda p2pos
     clc
     adc #$40
@@ -340,10 +344,6 @@ p2down:
     jmp print_p2_move
 
 print_p2_move:
-    lda p2pos
-    jsr move_cursor
-    jsr read_char
-    sta under_cursor
     lda p2pos
     jsr move_cursor
     lda #block 
